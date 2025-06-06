@@ -1,8 +1,31 @@
-# Go Vite React - Example
+# Go Vite React Example with Standard Mux
 
-Embed your vite application into golang, with hot module reloading and live reload for css / tsx changes!
+A modern web application example using:
 
-I recently tried to embed a vite react-ts application into a golang binary to have a single binary fullstack application. I stumbled across [this great video](https://www.youtube.com/watch?v=w_Rv_3-FF0g) which helped me to get it working. But I was not 100% satisified. One of the most valuable things about using vite, is the dev server and it's hot reloading capability. I really like that if I make a change to context in tsx files, or css files the changes are instantly available on in browser and my state does not automatically refresh.
+- Go (Backend)
+- React with Vite (Frontend)
+- Standard Go HTTP Mux for routing
+
+## Development
+
+To run the development server:
+
+```bash
+make dev
+```
+
+## Building
+
+To build the project:
+
+```bash
+make build
+```
+
+This will:
+
+1. Build the frontend assets
+2. Build the Go binary with production settings
 
 ## Project Setup
 
