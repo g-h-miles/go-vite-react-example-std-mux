@@ -2,14 +2,17 @@ package frontend
 
 import (
 	"embed"
+	"io"
+	"io/fs"
 	"log"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
+	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 )
 
 var (
@@ -19,53 +22,72 @@ var (
 	//go:embed dist/index.html
 	indexHTML embed.FS
 
-	distDirFS     = echo.MustSubFS(dist, "dist")
-	distIndexHTML = echo.MustSubFS(indexHTML, "dist")
+	distDirFS     fs.FS
+	distIndexHTML fs.FS
 )
 
-func RegisterHandlers(e *echo.Echo) {
-	if os.Getenv("ENV") == "dev" {
-		log.Println("Running in dev mode")
-		setupDevProxy(e)
-		return
+func init() {
+	var err error
+	distDirFS, err = fs.Sub(dist, "dist")
+	if err != nil {
+		panic(err)
 	}
-	// Use the static assets from the dist directory
-	e.FileFS("/", "index.html", distIndexHTML)
-	e.StaticFS("/", distDirFS)
-	// This is needed to serve the index.html file for all routes that are not /api/*
-	// neede for SPA to work when loading a specific url directly
-	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
-		Skipper: func(c echo.Context) bool {
-			// Skip the proxy if the prefix is /api
-			return len(c.Path()) >= 4 && c.Path()[:4] == "/api"
-		},
-		// Root directory from where the static content is served.
-		Root: "/",
-		// Enable HTML5 mode by forwarding all not-found requests to root so that
-		// SPA (single-page application) can handle the routing.
-		HTML5:      true,
-		Browse:     false,
-		IgnoreBase: true,
-		Filesystem: http.FS(distDirFS),
-	}))
+	distIndexHTML, err = fs.Sub(indexHTML, "dist")
+	if err != nil {
+		panic(err)
+	}
 }
 
-func setupDevProxy(e *echo.Echo) {
-	url, err := url.Parse("http://localhost:5173")
+func RegisterHandlers(mux *http.ServeMux) {
+	if os.Getenv("ENV") == "dev" {
+		log.Println("Running in dev mode")
+		setupDevProxy(mux)
+		return
+	}
+
+	mux.HandleFunc("/", spaHandler(distDirFS))
+}
+
+func setupDevProxy(mux *http.ServeMux) {
+	target, err := url.Parse("http://localhost:5173")
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Setep a proxy to the vite dev server on localhost:5173
-	balancer := middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{
-		{
-			URL: url,
-		},
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api") {
+			http.NotFound(w, r)
+			return
+		}
+		proxy.ServeHTTP(w, r)
 	})
-	e.Use(middleware.ProxyWithConfig(middleware.ProxyConfig{
-		Balancer: balancer,
-		Skipper: func(c echo.Context) bool {
-			// Skip the proxy if the prefix is /api
-			return len(c.Path()) >= 4 && c.Path()[:4] == "/api"
-		},
-	}))
+}
+
+func spaHandler(staticFS fs.FS) http.HandlerFunc {
+	fileServer := http.FileServer(http.FS(staticFS))
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api") {
+			http.NotFound(w, r)
+			return
+		}
+
+		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if p == "" {
+			p = "index.html"
+		}
+
+		if _, err := fs.Stat(staticFS, p); err == nil {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		f, err := staticFS.Open("index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		io.Copy(w, f)
+	}
 }
