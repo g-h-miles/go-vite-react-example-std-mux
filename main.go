@@ -24,7 +24,7 @@ func main() {
 
 	// Basic APi endpoint
 	api.GET("/message", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"message": "Hello, from the golang World!"})
+		return c.JSON(http.StatusOK, map[string]string{"message": "Hello, from the golang World! - updated"})
 	})
 
 	e.Logger.Fatal(e.Start(fmt.Sprintf(":%d", 3000)))
