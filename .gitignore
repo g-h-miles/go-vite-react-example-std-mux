@@ -4,3 +4,13 @@
 /dist
 
 /.env
+
+/**/node_modules
+/**/dist
+/**/build
+/**/bin
+/**/tmp
+/**/vendor
+/**/go.sum
+/**/go.mod
+/**/go.work

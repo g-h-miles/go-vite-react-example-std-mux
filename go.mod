@@ -1,4 +1,4 @@
-module github.com/danhawkins/go-vite-react-example
+module github.com/g-h-miles/go-vite-react-example-std-mux
 
 go 1.24
 

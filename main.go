@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/danhawkins/go-vite-react-example/frontend"
+	"github.com/g-h-miles/go-vite-react-example-std-mux/frontend"
 )
 
 func main() {
