@@ -4,3 +4,7 @@
 /dist
 
 /.env
+/.pnp.*
+/frontend/.yarn
+frontend/.pnp.*
+frontend/yarn.lock

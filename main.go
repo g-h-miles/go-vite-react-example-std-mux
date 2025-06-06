@@ -5,27 +5,26 @@ import (
 	"net/http"
 
 	"github.com/danhawkins/go-vite-react-example/frontend"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
-	// Create a new echo server
-	e := echo.New()
-
-	// Add standard middleware
-	e.Use(middleware.Logger())
+	mux := http.NewServeMux()
 
 	// Setup the frontend handlers to service vite static assets
-	frontend.RegisterHandlers(e)
+	frontend.RegisterHandlers(mux)
 
-	// Setup the API Group
-	api := e.Group("/api")
-
-	// Basic APi endpoint
-	api.GET("/message", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"message": "Hello, from the golang World! - updated"})
+	// Basic API endpoint
+	mux.HandleFunc("/api/message", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"message":"Hello, from the golang World! - updated"}`)
 	})
 
-	e.Logger.Fatal(e.Start(fmt.Sprintf(":%d", 3000)))
+	fmt.Println("Listening on :3000")
+	if err := http.ListenAndServe(":3000", mux); err != nil {
+		fmt.Println(err)
+	}
 }

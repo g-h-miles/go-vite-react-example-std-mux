@@ -29,11 +29,11 @@ This will:
 
 ## Project Setup
 
-We start with a basic go application usng the Echo framework where we a single APi endpoint to return some text. We also have a vite application created using `yarn create vite` in the frontend folder.
+We start with a basic Go application using the standard library HTTP mux where we have a single API endpoint to return some text. The frontend is a Vite React application created using `yarn create vite` in the frontend folder.
 
 The frontend calls the API endpoint to return the text.
 
-We have a [frontend.go](frontend/frontend.go) file which uses embed and echo to serve the content from the dist folder.
+We have a [frontend.go](frontend/frontend.go) file which uses the embed package and the standard library to serve the content from the dist folder.
 
 ## Run in development mode
 
@@ -49,7 +49,7 @@ Using `docker build -t go-vite .`, will use a multistage dockerfile to build the
 
 ## Hot Reloading
 
-Instead of serving static assets from go when we running in dev mode, we will setup a proxy from echo that will route the requests to a running vite dev server, unless the path is prefixed with `/api`, this will allow for the HMR and live reloading to happen just as if you were running `vite dev` but it will also allow for api paths to be served.
+Instead of serving static assets from Go when running in dev mode, we setup a proxy using `httputil.ReverseProxy` that routes requests to a running vite dev server unless the path is prefixed with `/api`. This allows HMR and live reloading to work as if you were running `vite dev` while still serving API paths from Go.
 
 All the changes required to take the initial project and support hot module reloading can be found in the [pull request](https://github.com/danhawkins/go-vite-react-example/pull/1)
 
@@ -72,35 +72,28 @@ _ "github.com/joho/godotenv/autoload"
 If we are running in dev mode, setup the dev proxy
 
 ```golang
-func RegisterHandlers(e *echo.Echo) {
+func RegisterHandlers(mux *http.ServeMux) {
   if os.Getenv("ENV") == "dev" {
     log.Println("Running in dev mode")
-    setupDevProxy(e)
+    setupDevProxy(mux)
     return
   }
-  // Use the static assets from the dist directory
-  e.FileFS("/", "index.html", distIndexHTML)
-  e.StaticFS("/", distDirFS)
+  mux.HandleFunc("/", spaHandler(distDirFS))
 }
 
-func setupDevProxy(e *echo.Echo) {
-  url, err := url.Parse("http://localhost:5173")
+func setupDevProxy(mux *http.ServeMux) {
+  target, err := url.Parse("http://localhost:5173")
   if err != nil {
     log.Fatal(err)
   }
-  // Setep a proxy to the vite dev server on localhost:5173
-  balancer := middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{
-    {
-      URL: url,
-    },
+  proxy := httputil.NewSingleHostReverseProxy(target)
+  mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+    if strings.HasPrefix(r.URL.Path, "/api") {
+      http.NotFound(w, r)
+      return
+    }
+    proxy.ServeHTTP(w, r)
   })
-  e.Use(middleware.ProxyWithConfig(middleware.ProxyConfig{
-    Balancer: balancer,
-    Skipper: func(c echo.Context) bool {
-      // Skip the proxy if the prefix is /api
-      return len(c.Path()) >= 4 && c.Path()[:4] == "/api"
-    },
-  }))
 }
 ```
 
