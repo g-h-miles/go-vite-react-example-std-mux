@@ -3,13 +3,11 @@ package middleware
 
 import (
 	"embed"
-	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"path" // Use 'path' for virtual FS paths, not 'filepath'
 	"strings"
 )
@@ -28,15 +26,23 @@ type SPAConfig struct {
 
 	// --- Optional fields with sensible defaults ---
 	DevProxyURL string
-	APIPrefix   string
-	DevEnvVar   string
-	DevEnvValue string
+
+	Skipper func(r *http.Request) bool
+
+	IsDevMode bool
+}
+
+func defaultSPASkipper(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, "/api")
 }
 
 // NewSPAHandler creates a new handler for a Single Page Application.
 // It returns an error if the configuration is invalid for production mode.
-func NewSPAHandler(config SPAConfig) (http.HandlerFunc, error) {
-	// --- Set defaults for optional fields ---
+func SPA(config SPAConfig) func(http.HandlerFunc) http.HandlerFunc {
+	if config.Skipper == nil {
+		config.Skipper = defaultSPASkipper
+	}
+
 	if config.DistPath == "" {
 		config.DistPath = "frontend/dist"
 	}
@@ -46,44 +52,15 @@ func NewSPAHandler(config SPAConfig) (http.HandlerFunc, error) {
 	if config.DevProxyURL == "" {
 		config.DevProxyURL = "http://localhost:5173"
 	}
-	if config.APIPrefix == "" {
-		config.APIPrefix = "/api"
-	}
-	if config.DevEnvVar == "" {
-		config.DevEnvVar = "ENV"
-	}
-	if config.DevEnvValue == "" {
-		config.DevEnvValue = "dev"
-	}
 
-	// --- THE CRUCIAL VALIDATION STEP ---
-	// Only validate if we are in production mode. This allows developers
-	// to run the backend in dev mode without needing to build the frontend first.
-	isDevMode := os.Getenv(config.DevEnvVar) == config.DevEnvValue
-	// if !isDevMode {
-	// 	// Check that the DistFS is not empty and contains the index file.
-	// 	// This is our guardrail against a missing //go:embed directive.
-	// 	indexPath := path.Join(config.DistPath, config.IndexFile)
-	// 	f, err := config.DistFS.Open(indexPath)
-	// 	if err != nil {
-	// 		// Return a clear, actionable error.
-	// 		return nil, fmt.Errorf(
-	// 			"SPA assets misconfigured: could not find '%s' in the embedded filesystem. "+
-	// 				"Ensure your //go:embed directive is correct and includes the frontend build output.",
-	// 			indexPath,
-	// 		)
-	// 	}
-	// 	f.Close() // Don't forget to close the file.
-	// }
-
-	// --- MODIFIED VALIDATION LOGIC ---
+	isDevMode := config.IsDevMode
 	if isDevMode {
 		// In DEV mode, we CHECK but only WARN if files are missing.
 		indexPath := path.Join(config.DistPath, config.IndexFile)
 		if _, err := config.DistFS.Open(indexPath); err != nil {
 			log.Printf(
 				"WARN: SPA assets not found at '%s'. This is okay in dev mode, as requests will be proxied to '%s'. "+
-					"However, this will be a FATAL ERROR in production builds.",
+					"However, this will be a FATAL ERROR in production builds",
 				indexPath,
 				config.DevProxyURL,
 			)
@@ -93,39 +70,33 @@ func NewSPAHandler(config SPAConfig) (http.HandlerFunc, error) {
 		indexPath := path.Join(config.DistPath, config.IndexFile)
 		f, err := config.DistFS.Open(indexPath)
 		if err != nil {
-			return nil, fmt.Errorf(
-				"SPA assets misconfigured: could not find '%s' in the embedded filesystem. "+
-					"Ensure your //go:embed directive is correct and includes the frontend build output.",
+			log.Printf(
+				"FATAL: SPA assets not found at '%s'. This is a FATAL ERROR in production builds",
 				indexPath,
 			)
+			return nil
 		}
 		f.Close()
 	}
-
-	// --- Create the handler using the now-validated config ---
-	// We pre-calculate the sub-filesystem for production mode here.
 	distDirFS, err := fs.Sub(config.DistFS, config.DistPath)
 	if err != nil {
-		// This error is less likely but still possible if DistPath is wrong.
-		return nil, fmt.Errorf("failed to create sub-filesystem for dist path '%s': %w", config.DistPath, err)
+		log.Fatalf("FATAL: failed to create sub-filesystem for dist path '%s': %v", config.DistPath, err)
 	}
 
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, config.APIPrefix) {
-			// This should be handled by your API router, but as a fallback,
-			// we can just let it pass through. A real router is better.
-			// For this example, we assume another handler will take care of it.
-			return
-		}
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if config.Skipper(r) {
+				next(w, r)
+				return
+			}
 
-		if isDevMode {
-			handleDevMode(w, r, config.DevProxyURL)
-		} else {
-			handleProdMode(w, r, distDirFS)
-		}
+			if isDevMode {
+				handleDevMode(w, r, config.DevProxyURL)
+			} else {
+				handleProdMode(w, r, distDirFS)
+			}
+		})
 	}
-
-	return handler, nil
 }
 
 func handleDevMode(w http.ResponseWriter, r *http.Request, proxyURL string) {

@@ -53,6 +53,10 @@ func init() {
 // 	}
 // }
 
+func dummyHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(`{"message": "Hello, from the golang World! - updated- update again!! YESS!!"}`))
+}
+
 func main() {
 	// ensureFrontendBuild()
 
@@ -71,16 +75,14 @@ func main() {
 	// Setup the API Group
 	// api := m.Group("/api")
 
-	spaHandler, err := middleware.NewSPAHandler(middleware.SPAConfig{
-		DistFS:   dist,
-		DistPath: "frontend/dist",
+	spaHandler := middleware.SPA(middleware.SPAConfig{
+		DistFS:    dist,
+		DistPath:  "frontend/dist",
+		IsDevMode: os.Getenv("ENV") == "dev",
 	})
-	if err != nil {
-		log.Fatal("Failed to create SPA handler:", err)
-	}
 
 	spaRouter := httpmux.NewServeMux()
-	spaRouter.HandleFunc("GET", "/{theRest...}", spaHandler)
+	spaRouter.Handle("GET", "/{theRest...}", spaHandler((nil)))
 
 	multi.Default(spaRouter)
 
@@ -90,7 +92,7 @@ func main() {
 	apiRouter.HandleFunc("GET", "/message", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message": "Hello, from the golang World! - updated- update again!! YESSo"}`))
+		w.Write([]byte(`{"message": "Hello, from the golang World! - updated- update again!! YESS!!"}`))
 	})
 
 	multi.Group("/api", apiRouter)
