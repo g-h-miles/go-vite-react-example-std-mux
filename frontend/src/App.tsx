@@ -27,7 +27,7 @@ function App() {
         </a>
       </div>
       <h1>Golang + Vite + React</h1>
-      <p>This is a test- are we sure this is HMR?</p>
+      <p>This is a test- are we sure this is HMR? Still???</p>
       <h2>{messageFromServer}</h2>
     </>
   );

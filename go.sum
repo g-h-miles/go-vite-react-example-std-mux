@@ -1,2 +1,6 @@
+github.com/g-h-miles/httpmux v0.1.0 h1:dizXUy4x8MMTawxUD7QSbNUkVMOESLn/gGbGnSrMF9c=
+github.com/g-h-miles/httpmux v0.1.0/go.mod h1:+SouDd5pqgaslmrihF9cyJu2Yj0JiT5x1NqDb592lOA=
+github.com/g-h-miles/httpmux v0.1.1 h1:zH/xoCqICmzWu69RoXc8h8VyhSRCDno6HPNrhXCaFwc=
+github.com/g-h-miles/httpmux v0.1.1/go.mod h1:+SouDd5pqgaslmrihF9cyJu2Yj0JiT5x1NqDb592lOA=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
 github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
